@@ -1,0 +1,382 @@
+private void CheckBreaks()
+		{
+			// Вызывается каждый раз при обновлении истории для каждой монеты.
+
+			try
+			{
+				int DayOfLastCorrectionMin = default;
+				int DayOfLastCorrectionMax = default;
+
+				int DayOfLastMin = default;
+				int DayOfLastMax = default;
+
+				decimal LastMin = decimal.MaxValue;
+				decimal LastMax = decimal.MinValue;
+				decimal LastMinClose = decimal.MaxValue;
+				decimal LastMaxClose = decimal.MinValue;
+
+				decimal CorrectionShortMin = decimal.MaxValue;
+				decimal CorrectionShortMax = decimal.MinValue;
+
+				decimal CorrectionLongMax = decimal.MinValue;
+				decimal CorrectionLongMin = decimal.MinValue;
+
+				List<decimal> PrevCorrectionShortMin = new List<decimal>();
+				List<decimal> PrevCorrectionShortMax = new List<decimal>();
+				PrevCorrectionShortMin.Add(0);
+				PrevCorrectionShortMax.Add(0);
+
+				List<decimal> PrevCorrectionLongMin = new List<decimal>();
+				List<decimal> PrevCorrectionLongMax = new List<decimal>();
+				PrevCorrectionLongMin.Add(0);
+				PrevCorrectionLongMax.Add(0);
+
+				List<int> BreakShortDay = new List<int>();
+				List<int> BreakLongDay = new List<int>();
+
+				bool MaxIsLocked = false;
+				bool LastMaxIsNew = false;
+				bool LongDay = false;   // ???
+				bool CorrectionIsNew = false;
+
+				int j = default;
+				int k = default;
+
+				if(History[default].Open > History[default].Close)
+				{
+					CorrectionShortMax = History[default].High;
+
+					CorrectionShortMin = History[default].Open;
+
+					PrevCorrectionShortMin[0] = CorrectionShortMin;
+
+					PrevCorrectionShortMax [0] = CorrectionShortMax;
+
+					LastMax = History[default].High;
+
+					LastMin = History[default].Low;
+
+					LongDay = false;
+
+					LastMinClose = History[default].Close;
+
+					k = PrevCorrectionShortMax.Count;
+				}
+				else
+				{
+					CorrectionLongMax = History[default].Low;
+
+					CorrectionLongMin = History[default].Open;
+
+					PrevCorrectionLongMin[0] = CorrectionLongMin;
+
+					PrevCorrectionLongMax[0] = CorrectionLongMax;
+
+					LastMax = History[default].High;
+
+					LastMin = History[default].Low;
+
+					LongDay = true;
+
+					LastMaxClose = History[default].Close;
+
+					j = PrevCorrectionLongMax.Count;
+				}
+
+				int LastCloseDay = History.Count;	// ???
+
+				for(int i=1; i<LastCloseDay; ++i)
+				{
+					if(LongDay == false)
+					{
+						if (CorrectionIsNew)
+						{
+							CorrectionIsNew = false;
+							//i = DayOfLastMax;
+							CorrectionShortMax = History[DayOfLastMax].High;   // Новое движение
+							CorrectionShortMin = History [DayOfLastMax].Low;
+						}
+
+						if (LastMin == default)
+                        {
+							LastMin = History[i].Low;
+							LastMinClose = History[i].Close;
+						}
+
+						if (History[i].Close < LastMinClose)
+                        {
+							LastMinClose = History[i].Close;
+							MaxIsLocked = false;
+						}
+
+						if(History[i].Low < LastMin)
+						{
+							LastMin = History[i].Low;
+
+							LastMaxIsNew = true;
+							
+
+							if (CorrectionShortMin != default && PrevCorrectionShortMax.Last()!= CorrectionShortMax && MaxIsLocked == false)	//
+							{
+								PrevCorrectionShortMin.Add(CorrectionShortMin);
+								PrevCorrectionShortMax.Add(CorrectionShortMax);
+
+								MaxIsLocked = true;
+								LastMaxIsNew = false;
+
+								k = PrevCorrectionShortMax.Count;
+			
+								CorrectionShortMax = default;
+								CorrectionShortMin = default;
+							}
+
+							
+						}
+
+						if(History[i].Open > History[i].Close)  // Следущая свеча в шорте красная.
+						{
+								DayOfLastMin = i;	
+						}
+						else
+						{
+							if(CorrectionShortMax == default)
+							{
+								CorrectionShortMax = History[i].High;
+								CorrectionShortMin = History[i].Close;
+							}
+
+							if(CorrectionShortMax  < History[i].High)	// Подстраиваем коррекцию под последнее движение вверх.
+							{
+								CorrectionShortMax  = History[i].High;	// Минимальное значение лонговой коррекции.
+							}
+
+							if(CorrectionShortMin  < History[i].Close)	// Подстраиваем коррекцию под последнее движение вверх.
+							{
+								CorrectionShortMin  = History[i].Close;	// Минимальное значение лонговой коррекции.
+							}
+
+							if(History[i].Close > PrevCorrectionShortMax.Last() && LastMin != History[i].Low && PrevCorrectionShortMin.Last() != 0 && k == PrevCorrectionShortMin.Count)	// Тригер слома.
+							{
+								CorrectionLongMax = default;	// Начинается новое движение.
+								CorrectionLongMin = default;
+								CorrectionIsNew = true;
+
+								LastMaxClose = History[i].Close;
+								LastMax = History[i].High;
+
+
+								LongDay = true;
+								MaxIsLocked = false;
+
+								k = 0;
+
+								// Выдаем сообщение о последнем сломе:
+								if (i == History.Count - 1)
+								{
+									if (LongDay)
+									{
+										TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+									}
+									else
+									{
+										TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+									}
+								}
+
+								//	TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), уровень слома находится на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+							}
+							
+							if (History[i].Close > LastMax && LongDay == false)  // Тригер слома.
+							{
+								CorrectionLongMax = default;    // Начинается новое движение.
+								CorrectionLongMin = default;
+								CorrectionIsNew = true;
+
+								LastMaxClose = History[i].Close;
+								LastMax = History[i].High;
+
+								LongDay = true;
+								MaxIsLocked = false;
+
+								PrevCorrectionShortMin.Add(LastMaxClose);
+								PrevCorrectionShortMax.Add(LastMax);
+
+								k = PrevCorrectionShortMin.Count;
+
+								// Выдаем сообщение о последнем сломе:
+								if (i == History.Count - 1)
+								{
+									if (LongDay)
+									{
+										TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+									}
+									else
+									{
+										TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+									}
+								}
+
+								//	TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), уровень слома находится на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+							}
+						}
+					}
+
+					if(LongDay)
+					{
+						if (CorrectionIsNew)
+						{
+							CorrectionIsNew = false;
+							//i = DayOfLastMin;
+							CorrectionLongMax = History[DayOfLastMin].Low;    // Начинается новое движение.
+							CorrectionLongMin = History[DayOfLastMin].Close;
+						}
+						
+
+						if (LastMax == default)
+						{
+							LastMax = History[i].Low;
+							LastMaxClose = History[i].Close;
+						}
+
+						if (History[i].Close > LastMaxClose)
+						{
+							LastMaxClose = History[i].Close;
+							MaxIsLocked = false;
+						}
+
+						if (History[i].High > LastMax)
+						{
+
+							LastMax = History[i].High;
+
+							LastMaxIsNew = true;
+							
+
+							if (CorrectionLongMin != default && PrevCorrectionLongMax.Last() != CorrectionLongMax && MaxIsLocked == false)   // Условие наличия коррекции.
+							{
+								PrevCorrectionLongMin.Add(CorrectionLongMin);
+								PrevCorrectionLongMax.Add(CorrectionLongMax);
+
+								j = PrevCorrectionLongMax.Count;
+
+								MaxIsLocked = true;
+								LastMaxIsNew = false;
+
+								CorrectionLongMax = default;
+								CorrectionLongMin = default;
+							}
+
+							
+						}
+
+						if(History[i].Open < History[i].Close)	// Следущая свеча в лонге зеленая.
+							{
+							DayOfLastMax = i;
+							}
+						else
+						{
+							// Eсли красная свеча в лонге:	
+
+								if(CorrectionLongMax == default)
+								{
+									CorrectionLongMax = History[i].Low;
+									CorrectionLongMin = History[i].Close;
+								}
+
+								//if (LastMaxIsNew && (CorrectionLongMin != default && PrevCorrectionLongMax.Last() != CorrectionLongMax && MaxIsLocked == false))
+                                //{
+								//	PrevCorrectionLongMin.Add(CorrectionLongMin);
+								//	PrevCorrectionLongMax.Add(CorrectionLongMax);
+								//
+								//	j = PrevCorrectionLongMax.Count;
+								//
+								//	MaxIsLocked = true;
+								//	LastMaxIsNew = false;
+								//
+								//	CorrectionLongMax = default;
+								//	CorrectionLongMin = default;
+								//}
+
+								if(CorrectionLongMin > History[i].Low)	// Подстраиваем коррекцию под последнее движение вниз.
+								{
+									CorrectionLongMin = History[i].Low;	// Минимальное значение лонговой коррекции.
+								}
+								
+								if(CorrectionLongMax > History[i].Close)	// Подстраиваем коррекцию под последнее движение вниз.
+								{
+									CorrectionLongMax = History[i].Close;	// Минимальное значение лонговой коррекции.
+								}
+
+								if(History[i].Close < PrevCorrectionLongMax.Last() && LastMax != History[i].High && PrevCorrectionLongMax.Last() != 0 && j == PrevCorrectionLongMax.Count)	// Тригер слома.
+								{
+									CorrectionShortMax = default;	// Новое движение
+									CorrectionShortMin = default;
+									CorrectionIsNew = true;
+
+									LastMinClose = History[i].Close;				
+									LastMin = History[i].Low;
+
+									LongDay = false;
+									MaxIsLocked = false;
+
+									j = 0;
+
+									// Выдаем сообщение о последнем сломе:
+									if (i == History.Count - 1)
+									{
+										if (LongDay)
+										{
+											TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+										}
+										else
+										{
+											TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+										}
+									}
+
+
+								//TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), уровень слома находится на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+							}
+
+								if (History[i].Close < LastMin && LongDay == true)
+								{
+									CorrectionShortMax = default;   // Новое движение
+									CorrectionShortMin = default;
+									CorrectionIsNew = true;
+
+									LastMinClose = History[i].Close;
+									LastMin = History[i].Low;
+
+									LongDay = false;
+									MaxIsLocked = false;
+
+									PrevCorrectionShortMin.Add(LastMax);
+									PrevCorrectionShortMax.Add(LastMaxClose);
+
+									j = 0;
+
+									// Выдаем сообщение о последнем сломе:
+									if (i == History.Count - 1)
+									{
+										if (LongDay)
+										{
+											TelegramBot.Send(string.Format("Обнаружен слом в ЛОНГ({0}), на значении{1}", Symbol, Format(PrevCorrectionShortMin.Last())));
+										}
+										else
+										{
+											TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+										}
+									}
+
+
+								//TelegramBot.Send(string.Format("Обнаружен слом в ШОРТ({0}), уровень слома находится на значении{1}", Symbol, Format(PrevCorrectionLongMin.Last())));
+							}
+						}
+					}
+				}
+			}
+			catch(Exception exception)
+			{
+				Logger.Write("CheckBreaks: " + exception.Message);
+			}
+		}
